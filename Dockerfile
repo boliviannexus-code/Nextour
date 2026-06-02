@@ -14,7 +14,6 @@ FROM composer:2 AS vendor
 
 WORKDIR /app
 
-RUN docker-php-ext-install exif
 
 COPY composer.json composer.lock ./
 COPY app ./app
