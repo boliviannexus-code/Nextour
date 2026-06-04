@@ -15,8 +15,9 @@ class TourResource extends JsonResource
         return [
             'id' => $this->id,
             'title' => $this->display_title,
-            'short_description' => $this->short_description ?: $this->description,
-            'full_description' => $this->full_description,
+            'slug' => $this->localized_slug,
+            'short_description' => $this->localized_short_description,
+            'full_description' => $this->localized_description,
             'location' => [
                 'country' => $this->country,
                 'city' => $this->city,
@@ -26,7 +27,7 @@ class TourResource extends JsonResource
             'duration' => $this->duration,
             'guide_type' => $this->whenLoaded('guideType', fn () => [
                 'id' => $this->guideType?->id,
-                'title' => $this->guideType?->title,
+                'title' => $this->guideType?->localized_title,
             ]),
             'category' => new CategoryResource($this->whenLoaded('category')),
             'main_image_url' => $mainImage,
@@ -41,8 +42,8 @@ class TourResource extends JsonResource
             'minimum_capacity' => $this->minimum_capacity,
             'capacity' => $this->capacity,
             'availability' => TourAvailabilityResource::collection($this->whenLoaded('availabilities')),
-            'includes' => $this->includes ?: $this->included,
-            'excludes' => $this->excludes ?: $this->not_included,
+            'includes' => $this->translated('includes', fallback: $this->includes ?: $this->included),
+            'excludes' => $this->translated('excludes', fallback: $this->excludes ?: $this->not_included),
             'itinerary' => $this->whenLoaded('itineraryDays', fn () => $this->itineraryDays->map(fn ($day): array => [
                 'day_number' => $day->day_number,
                 'title' => $day->title,
@@ -52,7 +53,7 @@ class TourResource extends JsonResource
                     'start_time' => $stop->start_time,
                     'title' => $stop->title,
                     'location_name' => $stop->location_name,
-                    'activity_type' => $stop->relationLoaded('activityType') ? $stop->activityType?->title : null,
+                    'activity_type' => $stop->relationLoaded('activityType') ? $stop->activityType?->localized_title : null,
                 ])->values() : [],
             ])->values()),
         ];

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\AuditsCompanyChanges;
+use App\Models\Concerns\HasTranslations;
 use Database\Factories\CategoryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use OwenIt\Auditing\Contracts\Auditable;
 class Category extends Model implements Auditable
 {
     /** @use HasFactory<CategoryFactory> */
-    use AuditsCompanyChanges, HasFactory;
+    use AuditsCompanyChanges, HasFactory, HasTranslations;
 
     protected $fillable = [
         'name',
@@ -35,5 +36,20 @@ class Category extends Model implements Auditable
     public function tours(): HasMany
     {
         return $this->hasMany(Tour::class);
+    }
+
+    public function getLocalizedNameAttribute(): string
+    {
+        return $this->translated('name', fallback: $this->name);
+    }
+
+    public function getLocalizedDescriptionAttribute(): ?string
+    {
+        return $this->translated('description', fallback: $this->description);
+    }
+
+    protected function translationModel(): string
+    {
+        return CategoryTranslation::class;
     }
 }

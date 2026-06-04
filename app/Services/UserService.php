@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class UserService
 {
+    private const PROTECTED_ROLES = ['super_admin', 'admin'];
+
     public function __construct(
         private readonly UserRepository $users
     ) {}
@@ -26,10 +28,12 @@ class UserService
         return $this->users->findWithTrashed($id);
     }
 
-    public function create(array $data): User
+    public function create(array $data, ?User $actor = null): User
     {
         $roles = $data['roles'] ?? [];
         unset($data['roles']);
+
+        $this->ensureCanTouchProtectedRoles($roles, $actor);
 
         $data = $this->applyCompanyAssignmentRules($data);
         $data['password'] = Hash::make($data['password']);
@@ -43,7 +47,7 @@ class UserService
         return $user->refresh()->load('roles');
     }
 
-    public function update(User $user, array $data): User
+    public function update(User $user, array $data, ?User $actor = null): User
     {
         $roles = $data['roles'] ?? null;
         unset($data['roles'], $data['password']);
@@ -58,7 +62,7 @@ class UserService
         $user = $this->users->update($user, $data);
 
         if (is_array($roles)) {
-            $this->syncRoles($user, $roles);
+            $this->syncRoles($user, $roles, $actor);
         }
 
         return $user->refresh()->load('roles');
@@ -90,8 +94,10 @@ class UserService
         return $user;
     }
 
-    public function syncRoles(User $user, array $roles): User
+    public function syncRoles(User $user, array $roles, ?User $actor = null): User
     {
+        $this->ensureCanTouchProtectedRoles($roles, $actor, $user);
+
         $removingAdminRole = $user->hasAnyRole(['admin', 'super_admin'])
             && empty(array_intersect($roles, ['admin', 'super_admin']));
 
@@ -159,5 +165,23 @@ class UserService
         }
 
         return CompanyContext::applyToData($data, $actor);
+    }
+
+    private function ensureCanTouchProtectedRoles(array $roles, ?User $actor = null, ?User $target = null): void
+    {
+        $actor ??= auth()->user();
+
+        if ($actor?->hasRole('super_admin')) {
+            return;
+        }
+
+        $assigningProtectedRole = array_intersect($roles, self::PROTECTED_ROLES) !== [];
+        $targetHasProtectedRole = $target?->hasAnyRole(self::PROTECTED_ROLES) ?? false;
+
+        if ($assigningProtectedRole || $targetHasProtectedRole) {
+            throw ValidationException::withMessages([
+                'roles' => 'Solo un super administrador puede asignar o modificar roles administrativos.',
+            ]);
+        }
     }
 }

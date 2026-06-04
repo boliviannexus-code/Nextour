@@ -11,8 +11,9 @@ class CategoryResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'name' => $this->name,
-            'description' => $this->description,
+            'name' => $this->localized_name,
+            'slug' => $this->translation()?->slug,
+            'description' => $this->localized_description,
             'tours_count' => $this->when(isset($this->tours_count), $this->tours_count),
         ];
     }

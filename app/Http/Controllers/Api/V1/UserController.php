@@ -31,7 +31,7 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): JsonResponse
     {
-        $user = $this->users->create($request->validated());
+        $user = $this->users->create($request->validated(), $request->user());
 
         return $this->successResponse(UserResource::make($user), 'Usuario creado correctamente.', 201);
     }
@@ -47,7 +47,7 @@ class UserController extends Controller
     {
         $this->authorize('update', $user);
 
-        $user = $this->users->update($user, $request->validated());
+        $user = $this->users->update($user, $request->validated(), $request->user());
 
         return $this->successResponse(UserResource::make($user), 'Usuario actualizado correctamente.');
     }
@@ -83,7 +83,7 @@ class UserController extends Controller
     {
         $this->authorize('assignRoles', $user);
 
-        $user = $this->users->syncRoles($user, $request->validated('roles') ?? []);
+        $user = $this->users->syncRoles($user, $request->validated('roles') ?? [], $request->user());
 
         return $this->successResponse(UserResource::make($user), 'Roles actualizados correctamente.');
     }

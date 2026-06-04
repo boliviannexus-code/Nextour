@@ -38,7 +38,7 @@ class UserController extends Controller
 
         $data = [
             'companies' => $this->userRepository->companiesForSelect(),
-            'roles' => $this->userRepository->rolesForSelect(),
+            'roles' => $this->userRepository->rolesForSelect($request->user()),
         ];
 
         if ($request->ajax()) {
@@ -50,7 +50,7 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): JsonResponse|RedirectResponse
     {
-        $user = $this->users->create($request->validated());
+        $user = $this->users->create($request->validated(), $request->user());
 
         if ($request->ajax()) {
             return response()->json([
@@ -83,7 +83,7 @@ class UserController extends Controller
         $data = [
             'user' => $user->load('roles'),
             'companies' => $this->userRepository->companiesForSelect(),
-            'roles' => $this->userRepository->rolesForSelect(),
+            'roles' => $this->userRepository->rolesForSelect($request->user()),
         ];
 
         if ($request->ajax()) {
@@ -110,7 +110,7 @@ class UserController extends Controller
 
         $data = [
             'user' => $user->load('roles'),
-            'roles' => $this->userRepository->rolesForSelect(),
+            'roles' => $this->userRepository->rolesForSelect($request->user()),
         ];
 
         if ($request->ajax()) {
@@ -124,7 +124,7 @@ class UserController extends Controller
     {
         $this->authorize('update', $user);
 
-        $user = $this->users->update($user, $request->validated());
+        $user = $this->users->update($user, $request->validated(), $request->user());
 
         if ($request->ajax()) {
             return response()->json([
@@ -199,7 +199,7 @@ class UserController extends Controller
         $this->authorize('assignRoles', $user);
 
         try {
-            $user = $this->users->syncRoles($user, $request->validated('roles') ?? []);
+            $user = $this->users->syncRoles($user, $request->validated('roles') ?? [], $request->user());
         } catch (ValidationException $exception) {
             if ($request->ajax()) {
                 return response()->json([

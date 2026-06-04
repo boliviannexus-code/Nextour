@@ -65,9 +65,12 @@ class UserRepository
             ->count();
     }
 
-    public function rolesForSelect(): Collection
+    public function rolesForSelect(?User $actor = null): Collection
     {
+        $actor ??= auth()->user();
+
         return Role::query()
+            ->when(! $actor?->hasRole('super_admin'), fn ($query) => $query->whereNotIn('name', ['super_admin', 'admin']))
             ->orderBy('name')
             ->get();
     }

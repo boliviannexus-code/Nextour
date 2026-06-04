@@ -32,6 +32,14 @@
 
                     <dt class="col-sm-3">Estado</dt>
                     <dd class="col-sm-9"><x-public.booking-status :status="$booking->status" /></dd>
+
+                    @role('super_admin')
+                        <dt class="col-sm-3">Estado crediticio</dt>
+                        <dd class="col-sm-9">{{ $booking->credit_status_label }}</dd>
+
+                        <dt class="col-sm-3">Visible a empresa</dt>
+                        <dd class="col-sm-9">{{ $booking->visible_to_company ? 'Si' : 'No' }}</dd>
+                    @endrole
                 </dl>
             </x-ui.card>
 
@@ -53,6 +61,37 @@
                     <dd class="col-sm-9">{{ $booking->special_requirements ?: '-' }}</dd>
                 </dl>
             </x-ui.card>
+
+            @role('super_admin')
+                <x-ui.table-card title="Historial de creditos">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Creditos</th>
+                                <th>Antes</th>
+                                <th>Despues</th>
+                                <th>Motivo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($booking->creditMovements as $movement)
+                                <tr>
+                                    <td>{{ $movement->created_at?->format('Y-m-d H:i') }}</td>
+                                    <td>{{ str($movement->movement_type)->replace('_', ' ')->headline() }}</td>
+                                    <td>{{ $movement->credits }}</td>
+                                    <td>{{ $movement->balance_before }}</td>
+                                    <td>{{ $movement->balance_after }}</td>
+                                    <td>{{ $movement->reason }}</td>
+                                </tr>
+                            @empty
+                                <x-ui.empty-row colspan="6" message="Sin movimientos de credito para esta reserva." />
+                            @endforelse
+                        </tbody>
+                    </table>
+                </x-ui.table-card>
+            @endrole
         </div>
 
         <div class="col-lg-4">

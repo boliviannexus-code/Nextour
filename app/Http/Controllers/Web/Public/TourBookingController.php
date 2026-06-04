@@ -19,19 +19,17 @@ class TourBookingController extends Controller
         private readonly TourBookingService $bookings,
     ) {}
 
-    public function create(Request $request, Tour $tour): View
+    public function create(Request $request, string $locale, Tour $tour): View
     {
         $tour = $this->publicTours->findPublicTour($tour);
         $people = max(1, (int) $request->integer('people', 1));
-        $travelDate = $request->string('date')->toString() ?: $tour->availabilities->first()?->date?->toDateString();
+        $travelDate = $request->string('date')->toString() ?: now()->toDateString();
         $quote = null;
 
-        if ($travelDate) {
-            try {
-                $quote = $this->bookings->quote($tour, $travelDate, $people);
-            } catch (\Throwable) {
-                $quote = null;
-            }
+        try {
+            $quote = $this->bookings->quote($tour, $travelDate, $people);
+        } catch (\Throwable) {
+            $quote = null;
         }
 
         [$firstName, $lastName] = $this->splitName((string) $request->user()->name);
@@ -46,7 +44,7 @@ class TourBookingController extends Controller
         ]);
     }
 
-    public function store(StoreTourBookingRequest $request, Tour $tour): RedirectResponse
+    public function store(StoreTourBookingRequest $request, string $locale, Tour $tour): RedirectResponse
     {
         $tour = $this->publicTours->findPublicTour($tour);
         $booking = $this->bookings->create($request->user(), $tour, $request->validated());

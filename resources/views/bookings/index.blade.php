@@ -28,6 +28,25 @@
                 <label class="form-label" for="date_to">Hasta</label>
                 <input class="form-control" id="date_to" name="date_to" type="date" value="{{ $filters['date_to'] ?? '' }}">
             </div>
+            @if ($isGlobalAdmin)
+                <div class="col-md-2">
+                    <label class="form-label" for="visibility">Visibilidad</label>
+                    <select class="form-select" id="visibility" name="visibility">
+                        <option value="">Todas</option>
+                        <option value="visible" @selected(($filters['visibility'] ?? '') === 'visible')>Visibles</option>
+                        <option value="held" @selected(($filters['visibility'] ?? '') === 'held')>Retenidas</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="credit_status">Creditos</label>
+                    <select class="form-select" id="credit_status" name="credit_status">
+                        <option value="">Todos</option>
+                        @foreach ($creditStatuses as $status => $label)
+                            <option value="{{ $status }}" @selected(($filters['credit_status'] ?? '') === $status)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
             <div class="col-md-3 d-flex gap-2">
                 <button class="btn btn-primary" type="submit"><i class="ti ti-search me-1"></i>Filtrar</button>
                 <a class="btn btn-outline-secondary" href="{{ route('bookings.index') }}">Limpiar</a>
@@ -44,6 +63,10 @@
                     <th>Personas</th>
                     <th>Total</th>
                     <th>Estado</th>
+                    @if ($isGlobalAdmin)
+                        <th>Creditos</th>
+                        <th>Visible</th>
+                    @endif
                     <th class="text-end">Acciones</th>
                 </tr>
             </thead>
@@ -63,12 +86,20 @@
                         <td>{{ $booking->people }}</td>
                         <td>${{ number_format((float) $booking->total_usd, 2) }}</td>
                         <td><x-public.booking-status :status="$booking->status" /></td>
+                        @if ($isGlobalAdmin)
+                            <td>{{ $booking->credit_status_label }}</td>
+                            <td>
+                                <span class="badge text-bg-{{ $booking->visible_to_company ? 'success' : 'warning' }}">
+                                    {{ $booking->visible_to_company ? 'Si' : 'No' }}
+                                </span>
+                            </td>
+                        @endif
                         <td class="text-end">
                             <a class="btn btn-outline-primary btn-sm" href="{{ route('bookings.show', $booking) }}">Ver detalle</a>
                         </td>
                     </tr>
                 @empty
-                    <x-ui.empty-row colspan="8" message="No hay reservas registradas." />
+                    <x-ui.empty-row :colspan="$isGlobalAdmin ? 10 : 8" message="No hay reservas registradas." />
                 @endforelse
             </tbody>
         </table>

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\AuditsCompanyChanges;
+use App\Models\Concerns\HasTranslations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use OwenIt\Auditing\Contracts\Auditable;
 
 class Tour extends Model implements Auditable
 {
-    use AuditsCompanyChanges, HasFactory;
+    use AuditsCompanyChanges, HasFactory, HasTranslations;
 
     public const STATUS_DRAFT = 'draft';
 
@@ -199,7 +200,27 @@ class Tour extends Model implements Auditable
 
     public function getDisplayTitleAttribute(): string
     {
-        return $this->title ?: $this->name;
+        return $this->translated('title', fallback: $this->title ?: $this->name);
+    }
+
+    public function getLocalizedSlugAttribute(): ?string
+    {
+        return $this->translation()?->slug;
+    }
+
+    public function getLocalizedShortDescriptionAttribute(): ?string
+    {
+        return $this->translated('short_description', fallback: $this->short_description ?: $this->description);
+    }
+
+    public function getLocalizedDescriptionAttribute(): ?string
+    {
+        return $this->translated('description', fallback: $this->full_description ?: $this->description);
+    }
+
+    protected function translationModel(): string
+    {
+        return TourTranslation::class;
     }
 
     public function scopePubliclyBookable(Builder $query): Builder

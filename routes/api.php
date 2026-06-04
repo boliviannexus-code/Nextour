@@ -9,7 +9,7 @@ use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')
-    ->middleware('throttle:api')
+    ->middleware(['throttle:api', 'setApiLocale'])
     ->group(function (): void {
         Route::post('auth/login', [AuthController::class, 'login'])->name('api.v1.login');
         Route::post('auth/register-tourist', [AuthController::class, 'registerTourist'])->name('api.v1.register-tourist');

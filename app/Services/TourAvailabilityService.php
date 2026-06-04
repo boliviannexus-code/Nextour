@@ -68,9 +68,10 @@ class TourAvailabilityService
         $date = CarbonImmutable::parse($data['date'])->toDateString();
         $availability = $this->availability->firstOrCreate($tour, $date);
 
+        $capacity = $this->normalizeCapacity($tour, $data['capacity'] ?? null);
         $payload = [
-            'status' => $data['status'],
-            'capacity' => $this->normalizeCapacity($tour, $data['capacity'] ?? null),
+            'status' => $this->statusForCapacity($data['status'], $capacity, $availability->booked_count),
+            'capacity' => $capacity,
         ];
 
         if (array_key_exists('restrictions', $data)) {
@@ -121,6 +122,12 @@ class TourAvailabilityService
                             ? $this->normalizeCapacity($tour, $data[$field])
                             : $data[$field];
                     }
+                }
+
+                if (array_key_exists('status', $payload) || array_key_exists('capacity', $payload)) {
+                    $status = $payload['status'] ?? $availability->status;
+                    $capacity = array_key_exists('capacity', $payload) ? $payload['capacity'] : $this->effectiveCapacity($tour, $availability);
+                    $payload['status'] = $this->statusForCapacity($status, $capacity, $availability->booked_count);
                 }
 
                 if ($payload !== []) {
@@ -222,6 +229,25 @@ class TourAvailabilityService
         }
 
         return $capacity;
+    }
+
+    private function statusForCapacity(string $status, ?int $capacity, int $bookedCount): string
+    {
+        if ($capacity === null) {
+            return $status === TourAvailability::STATUS_SOLD_OUT
+                ? TourAvailability::STATUS_AVAILABLE
+                : $status;
+        }
+
+        if ($status === TourAvailability::STATUS_AVAILABLE && $bookedCount >= $capacity) {
+            return TourAvailability::STATUS_SOLD_OUT;
+        }
+
+        if ($status === TourAvailability::STATUS_SOLD_OUT && $bookedCount < $capacity) {
+            return TourAvailability::STATUS_AVAILABLE;
+        }
+
+        return $status;
     }
 
     private function pricePayload(TourPrice $price): array

@@ -52,4 +52,14 @@ class User extends Authenticatable implements Auditable
     {
         return $this->hasMany(TourBooking::class);
     }
+
+    public function registrationRequests(): HasMany
+    {
+        return $this->hasMany(RegistrationRequest::class);
+    }
+
+    public function independentProfiles(): HasMany
+    {
+        return $this->hasMany(IndependentProfile::class);
+    }
 }

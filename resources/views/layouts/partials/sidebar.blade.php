@@ -1,12 +1,17 @@
 @php
-    $organizationOpen = request()->routeIs('companies.*', 'tours.*', 'bookings.*');
+    $organizationOpen = request()->routeIs('companies.*', 'tours.*', 'bookings.*', 'credit-purchases.index');
     $catalogOpen = request()->routeIs('categories.*', 'guide-types.*', 'transport-types.*', 'activity-types.*', 'website-settings.*');
-    $adminOpen = request()->routeIs('users.*', 'roles.*', 'permissions.*', 'audits.*');
+    $adminOpen = request()->routeIs('users.*', 'roles.*', 'permissions.*', 'audits.*', 'registration-requests.*', 'subscriptions.*', 'credit-packages.*', 'credit-consumption-rules.*', 'credit-purchases.requests.*');
+    $isManager = auth()->user()?->hasAnyRole(['manager', 'gerente']);
+    $isRegistrationApplicant = auth()->user()?->hasAnyRole(['empresa_pendiente', 'registration_applicant']);
+    $dashboardRoute = $isRegistrationApplicant ? 'dashboard' : ($isManager ? 'manager.dashboard' : 'dashboard');
 
+    $isGlobalAdmin = \App\Support\CompanyContext::isGlobalAdmin(auth()->user());
     $canOrganization = auth()->user()?->can('companies.view')
         || auth()->user()?->can('tours.view')
         || auth()->user()?->can('tours.availability')
-        || auth()->user()?->can('bookings.view');
+        || auth()->user()?->can('bookings.view')
+        || (auth()->user()?->can('credits.purchase') && ! $isGlobalAdmin);
     $canCatalog = auth()->user()?->can('categories.view')
         || auth()->user()?->can('guide_types.view')
         || auth()->user()?->can('transport_types.view')
@@ -15,14 +20,17 @@
     $canAdmin = auth()->user()?->can('users.view')
         || auth()->user()?->can('roles.view')
         || auth()->user()?->can('permissions.view')
-        || auth()->user()?->can('audits.view');
+        || auth()->user()?->can('audits.view')
+        || auth()->user()?->can('subscription.view')
+        || auth()->user()?->can('credits.view')
+        || auth()->user()?->hasRole('super_admin');
     $sidebarCompany = \App\Support\CompanyContext::activeCompany(auth()->user());
 @endphp
 
 <aside class="navbar navbar-vertical navbar-expand-lg app-sidebar" id="adminSidebar" data-bs-theme="dark">
     <div class="container-fluid">
         <h1 class="navbar-brand navbar-brand-autodark justify-content-start">
-            <a href="{{ route('dashboard') }}" class="d-flex align-items-center gap-2 text-decoration-none">
+            <a href="{{ route($dashboardRoute) }}" class="d-flex align-items-center gap-2 text-decoration-none">
                 <span class="lh-sm">
                     <span class="d-block text-truncate">{{ $sidebarCompany?->name ?? config('app.name', 'Base Admin') }}</span>
                     @if ($sidebarCompany)
@@ -34,10 +42,10 @@
 
         <div class="navbar-collapse" id="sidebar-menu">
             <ul class="navbar-nav pt-lg-3">
-                <li class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ route('dashboard') }}">
+                <li class="nav-item {{ request()->routeIs('dashboard', 'manager.dashboard') || ($isRegistrationApplicant && request()->routeIs('companies.*')) ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ route($dashboardRoute) }}">
                         <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-dashboard"></i></span>
-                        <span class="nav-link-title">Dashboard</span>
+                        <span class="nav-link-title">{{ $isRegistrationApplicant ? 'Mi empresa' : 'Dashboard' }}</span>
                     </a>
                 </li>
 
@@ -82,6 +90,14 @@
                                         </a>
                                     </li>
                                 @endcan
+                                @if (auth()->user()?->can('credits.purchase') && ! $isGlobalAdmin)
+                                    <li class="nav-item {{ request()->routeIs('credit-purchases.index') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('credit-purchases.index') }}">
+                                            <span class="nav-link-icon"><i class="ti ti-credit-card"></i></span>
+                                            <span class="nav-link-title">Comprar creditos</span>
+                                        </a>
+                                    </li>
+                                @endif
                             </ul>
                         </div>
                     </li>
@@ -185,6 +201,45 @@
                                         </a>
                                     </li>
                                 @endcan
+
+                                @can('subscription.view')
+                                    <li class="nav-item {{ request()->routeIs('subscriptions.*') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('subscriptions.index') }}">
+                                            <span class="nav-link-icon"><i class="ti ti-coins"></i></span>
+                                            <span class="nav-link-title">Suscripciones y Creditos</span>
+                                        </a>
+                                    </li>
+                                @endcan
+
+                                @can('credits.manage')
+                                    <li class="nav-item {{ request()->routeIs('credit-packages.*') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('credit-packages.index') }}">
+                                            <span class="nav-link-icon"><i class="ti ti-packages"></i></span>
+                                            <span class="nav-link-title">Paquetes de Creditos</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item {{ request()->routeIs('credit-consumption-rules.*') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('credit-consumption-rules.index') }}">
+                                            <span class="nav-link-icon"><i class="ti ti-scale"></i></span>
+                                            <span class="nav-link-title">Reglas de Consumo</span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item {{ request()->routeIs('credit-purchases.requests.*') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('credit-purchases.requests.index') }}">
+                                            <span class="nav-link-icon"><i class="ti ti-receipt"></i></span>
+                                            <span class="nav-link-title">Solicitudes de Creditos</span>
+                                        </a>
+                                    </li>
+                                @endcan
+
+                                @role('super_admin')
+                                    <li class="nav-item {{ request()->routeIs('registration-requests.*') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('registration-requests.index') }}">
+                                            <span class="nav-link-icon"><i class="ti ti-clipboard-check"></i></span>
+                                            <span class="nav-link-title">Gestion de Empresas</span>
+                                        </a>
+                                    </li>
+                                @endrole
                             </ul>
                         </div>
                     </li>

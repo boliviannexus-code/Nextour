@@ -20,7 +20,7 @@ class TouristPanelController extends Controller
         ]);
     }
 
-    public function show(Request $request, TourBooking $booking): View
+    public function show(Request $request, string $locale, TourBooking $booking): View
     {
         abort_unless((int) $booking->user_id === (int) $request->user()->id, 403);
 
@@ -29,7 +29,7 @@ class TouristPanelController extends Controller
         ]);
     }
 
-    public function voucher(Request $request, TourBooking $booking): View
+    public function voucher(Request $request, string $locale, TourBooking $booking): View
     {
         abort_unless((int) $booking->user_id === (int) $request->user()->id, 403);
 

@@ -1,14 +1,10 @@
 import * as bootstrap from 'bootstrap';
-import Swal from 'sweetalert2';
 import DataTable from 'datatables.net-bs5';
 import TomSelect from 'tom-select';
 import 'datatables.net-responsive-bs5';
 import 'datatables.net-bs5/css/dataTables.bootstrap5.min.css';
 import 'datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css';
-import 'sweetalert2/dist/sweetalert2.min.css';
 import 'tom-select/dist/css/tom-select.bootstrap5.min.css';
-
-window.Swal = Swal;
 
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 const ajaxModalElement = document.getElementById('ajaxModal');
@@ -16,25 +12,66 @@ const ajaxModal = ajaxModalElement ? new bootstrap.Modal(ajaxModalElement) : nul
 const ajaxModalTitle = document.getElementById('ajaxModalTitle');
 const ajaxModalBody = ajaxModalElement?.querySelector('[data-modal-body]');
 
-const toast = Swal.mixin({
-    toast: true,
-    position: 'top-end',
-    showConfirmButton: false,
-    timer: 2600,
-    timerProgressBar: true,
-});
+const alertStyles = {
+    success: { className: 'text-bg-success', title: 'Correcto' },
+    error: { className: 'text-bg-danger', title: 'Error' },
+    danger: { className: 'text-bg-danger', title: 'Error' },
+    warning: { className: 'text-bg-warning', title: 'Atencion' },
+    info: { className: 'text-bg-info', title: 'Informacion' },
+};
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+    }[char]));
+}
+
+function alertContainer() {
+    let container = document.querySelector('[data-alert-container]');
+
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'toast-container position-fixed top-0 end-0 p-3';
+        container.style.zIndex = '1080';
+        container.dataset.alertContainer = 'true';
+        document.body.append(container);
+    }
+
+    return container;
+}
+
+function showAppAlert(type, title, message = '') {
+    const style = alertStyles[type] ?? alertStyles.info;
+    const toastElement = document.createElement('div');
+    toastElement.className = `toast align-items-center border-0 shadow ${style.className}`;
+    toastElement.setAttribute('role', 'alert');
+    toastElement.setAttribute('aria-live', 'assertive');
+    toastElement.setAttribute('aria-atomic', 'true');
+
+    toastElement.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <div class="fw-semibold">${escapeHtml(title || style.title)}</div>
+                ${message ? `<div>${escapeHtml(message)}</div>` : ''}
+            </div>
+            <button class="btn-close btn-close-white me-2 m-auto" type="button" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+        </div>
+    `;
+
+    alertContainer().append(toastElement);
+    toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+    bootstrap.Toast.getOrCreateInstance(toastElement, { delay: 4200 }).show();
+}
 
 function showInitialAlerts() {
-    const success = document.querySelector('[data-swal-success]')?.dataset.swalSuccess;
-    const error = document.querySelector('[data-swal-error]')?.dataset.swalError;
-
-    if (success) {
-        toast.fire({ icon: 'success', title: success });
-    }
-
-    if (error) {
-        Swal.fire({ icon: 'error', title: 'Atencion', text: error });
-    }
+    document.querySelectorAll('[data-laravel-alert]').forEach((alert) => {
+        showAppAlert(alert.dataset.alertType || 'info', alert.dataset.alertTitle || '', alert.dataset.alertMessage || '');
+        alert.remove();
+    });
 }
 
 async function fetchHtml(url) {
@@ -76,7 +113,7 @@ function openAjaxModal(trigger) {
         })
         .catch((error) => {
             ajaxModal.hide();
-            Swal.fire({ icon: 'error', title: 'Error', text: error.message });
+            showAppAlert('error', 'Error', error.message);
         });
 }
 
@@ -166,7 +203,7 @@ async function submitAjaxForm(form) {
 
         if (response.status === 422) {
             showFormErrors(form, payload.errors ?? payload.data ?? {});
-            Swal.fire({ icon: 'error', title: 'Validacion', text: payload.message ?? 'Revisa los datos ingresados.' });
+            showAppAlert('error', 'Validacion', payload.message ?? 'Revisa los datos ingresados.');
 
             return;
         }
@@ -177,109 +214,70 @@ async function submitAjaxForm(form) {
 
         ajaxModal?.hide();
         await refreshContainer(form.dataset.refreshUrl);
-        toast.fire({ icon: 'success', title: payload.message ?? 'Operacion realizada correctamente.' });
+        showAppAlert('success', payload.message ?? 'Operacion realizada correctamente.');
     } catch (error) {
-        Swal.fire({ icon: 'error', title: 'Error', text: error.message });
+        showAppAlert('error', 'Error', error.message);
     } finally {
         setSubmitting(form, false);
     }
 }
 
 function confirmDelete(form) {
-    Swal.fire({
-        icon: 'warning',
-        title: form.dataset.confirmDelete ?? 'Confirmar eliminacion',
-        text: 'Esta accion no se puede deshacer facilmente.',
-        showCancelButton: true,
-        confirmButtonText: 'Si, eliminar',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#dc3545',
-    }).then((result) => {
-        if (result.isConfirmed) {
-            form.submit();
-        }
-    });
+    const message = `${form.dataset.confirmDelete ?? 'Confirmar eliminacion'}\n\nEsta accion no se puede deshacer facilmente.`;
+
+    if (window.confirm(message)) {
+        form.submit();
+    }
 }
 
 function confirmVoidPurchase(form) {
-    Swal.fire({
-        icon: 'warning',
-        title: form.dataset.confirmVoidPurchase ?? 'Anular compra',
-        text: 'Se revertira el stock ingresado por esta compra.',
-        input: 'textarea',
-        inputLabel: 'Motivo de anulacion',
-        inputPlaceholder: 'Describe el motivo',
-        inputAttributes: {
-            maxlength: 500,
-        },
-        showCancelButton: true,
-        confirmButtonText: 'Si, anular',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#dc3545',
-        preConfirm: (value) => {
-            if (!value || value.trim().length < 3) {
-                Swal.showValidationMessage('Ingresa un motivo de al menos 3 caracteres.');
-                return false;
-            }
+    const value = window.prompt(`${form.dataset.confirmVoidPurchase ?? 'Anular compra'}\n\nSe revertira el stock ingresado por esta compra.\n\nMotivo de anulacion:`);
 
-            return value.trim();
-        },
-    }).then(async (result) => {
-        if (!result.isConfirmed) {
-            return;
-        }
+    if (value === null) {
+        return;
+    }
 
-        const reason = document.createElement('input');
-        reason.type = 'hidden';
-        reason.name = 'void_reason';
-        reason.value = result.value;
-        form.append(reason);
+    const trimmed = value.trim();
 
-        if (form.matches('[data-ajax-form]')) {
-            await submitAjaxForm(form);
-            reason.remove();
-            return;
-        }
+    if (trimmed.length < 3) {
+        showAppAlert('warning', 'Motivo requerido', 'Ingresa un motivo de al menos 3 caracteres.');
+        return;
+    }
 
-        form.submit();
-    });
+    const reason = document.createElement('input');
+    reason.type = 'hidden';
+    reason.name = 'void_reason';
+    reason.value = trimmed;
+    form.append(reason);
+
+    if (form.matches('[data-ajax-form]')) {
+        submitAjaxForm(form).finally(() => reason.remove());
+        return;
+    }
+
+    form.submit();
 }
 
 function confirmVoidSale(form) {
-    Swal.fire({
-        icon: 'warning',
-        title: form.dataset.confirmVoidSale ?? 'Anular venta',
-        text: 'Se devolvera el stock de esta venta y dejara de contar en la caja.',
-        input: 'textarea',
-        inputLabel: 'Motivo de anulacion',
-        inputPlaceholder: 'Describe el motivo',
-        inputAttributes: {
-            maxlength: 500,
-        },
-        showCancelButton: true,
-        confirmButtonText: 'Si, anular',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#dc3545',
-        preConfirm: (value) => {
-            if (!value || value.trim().length < 3) {
-                Swal.showValidationMessage('Ingresa un motivo de al menos 3 caracteres.');
-                return false;
-            }
+    const value = window.prompt(`${form.dataset.confirmVoidSale ?? 'Anular venta'}\n\nSe devolvera el stock de esta venta y dejara de contar en la caja.\n\nMotivo de anulacion:`);
 
-            return value.trim();
-        },
-    }).then((result) => {
-        if (!result.isConfirmed) {
-            return;
-        }
+    if (value === null) {
+        return;
+    }
 
-        const reason = document.createElement('input');
-        reason.type = 'hidden';
-        reason.name = 'void_reason';
-        reason.value = result.value;
-        form.append(reason);
-        form.submit();
-    });
+    const trimmed = value.trim();
+
+    if (trimmed.length < 3) {
+        showAppAlert('warning', 'Motivo requerido', 'Ingresa un motivo de al menos 3 caracteres.');
+        return;
+    }
+
+    const reason = document.createElement('input');
+    reason.type = 'hidden';
+    reason.name = 'void_reason';
+    reason.value = trimmed;
+    form.append(reason);
+    form.submit();
 }
 
 function initAdminDataTables() {
@@ -350,11 +348,7 @@ function initAdminDataTables() {
 
         dataTable.on('xhr.dt', (_event, _settings, json, xhr) => {
             if (xhr.status === 401 || xhr.status === 403 || xhr.responseURL?.includes('/login')) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Sin acceso',
-                    text: 'No tienes permisos para cargar los datos de esta tabla o tu sesion expiro.',
-                });
+                showAppAlert('warning', 'Sin acceso', 'No tienes permisos para cargar los datos de esta tabla o tu sesion expiro.');
             }
         });
         table.dataset.datatableInitialized = '1';
@@ -998,11 +992,7 @@ function initPosSaleForm() {
             const alreadySelected = selectedPackagesInCart(productId, presentationId);
 
             if (quantity + alreadySelected > availablePackages) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Stock insuficiente',
-                    text: `Disponible: ${availablePackages} presentaciones. Ya agregaste ${alreadySelected}.`,
-                });
+                showAppAlert('warning', 'Stock insuficiente', `Disponible: ${availablePackages} presentaciones. Ya agregaste ${alreadySelected}.`);
 
                 return false;
             }
@@ -1017,7 +1007,7 @@ function initPosSaleForm() {
             const quantity = Math.max(1, Number(quantityPicker?.value || 1));
 
             if (!product?.value || !presentation?.value || !template) {
-                Swal.fire({ icon: 'warning', title: 'Falta informacion', text: 'Selecciona producto y presentacion.' });
+                showAppAlert('warning', 'Falta informacion', 'Selecciona producto y presentacion.');
                 return;
             }
 
@@ -1064,7 +1054,7 @@ function initPosSaleForm() {
                 const currentQuantity = Math.max(1, Number(quantityInput.value || 1));
 
                 if (currentQuantity + 1 > availablePackages) {
-                    Swal.fire({ icon: 'warning', title: 'Stock maximo', text: `Disponible: ${availablePackages} unidades.` });
+                    showAppAlert('warning', 'Stock maximo', `Disponible: ${availablePackages} unidades.`);
                     return;
                 }
 
@@ -1157,7 +1147,7 @@ function initPosSaleForm() {
                     const value = Math.max(1, Number(quantityInput.value || 1));
                     if (available > 0 && value > available) {
                         quantityInput.value = String(available);
-                        Swal.fire({ icon: 'warning', title: 'Stock maximo', text: `Disponible: ${available} presentaciones.` });
+                        showAppAlert('warning', 'Stock maximo', `Disponible: ${available} presentaciones.`);
                     }
                 }
                 updateTotals();
@@ -1632,11 +1622,7 @@ function initTransferForms(scope = document) {
 
             event.preventDefault();
             event.stopPropagation();
-            Swal.fire({
-                icon: 'warning',
-                title: 'Revisa la transferencia',
-                text: 'Selecciona almacenes diferentes y una cantidad disponible para continuar.',
-            });
+            showAppAlert('warning', 'Revisa la transferencia', 'Selecciona almacenes diferentes y una cantidad disponible para continuar.');
         });
 
         refreshProductOptions();

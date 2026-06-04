@@ -29,7 +29,7 @@ class PublicTourController extends Controller
 
     public function index(Request $request): View
     {
-        $filters = $request->only(['destination', 'date', 'start_date', 'end_date', 'people', 'category', 'max_price', 'duration']);
+        $filters = $request->only(['destination', 'date', 'start_date', 'end_date', 'people', 'category', 'duration']);
 
         return view('public.tours.index', [
             'tours' => $this->tours->search($filters),
@@ -38,7 +38,7 @@ class PublicTourController extends Controller
         ]);
     }
 
-    public function show(Tour $tour): View
+    public function show(string $locale, Tour $tour): View
     {
         return view('public.tours.show', [
             'tour' => $this->tours->findPublicTour($tour),

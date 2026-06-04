@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCompanyRequest;
 use App\Http\Requests\UpdateCompanyRequest;
 use App\Models\Company;
+use App\Models\RegistrationRequest;
 use App\Services\CompanyService;
+use App\Support\CompanyContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,9 +57,9 @@ class CompanyController extends Controller
 
     public function show(Request $request, Company $company): View
     {
-        abort_unless($request->user()?->can('companies.view'), 403);
+        abort_unless($request->user()?->can('companies.view') && CompanyContext::belongsToUser($company->id, $request->user()), 403);
 
-        $company->loadCount('users');
+        $company->load('registrationRequest')->loadCount('users');
 
         if ($request->ajax()) {
             return view('companies.partials.show', compact('company'));
@@ -68,7 +70,10 @@ class CompanyController extends Controller
 
     public function edit(Request $request, Company $company): View
     {
-        abort_unless($request->user()?->can('companies.update'), 403);
+        abort_unless($request->user()?->can('companies.update') && CompanyContext::belongsToUser($company->id, $request->user()), 403);
+
+        $company->load('registrationRequest.independentProfile');
+        abort_if($company->registrationRequest?->status === RegistrationRequest::STATUS_REJECTED, 403);
 
         if ($request->ajax()) {
             return view('companies.partials.edit-form', compact('company'));
@@ -79,7 +84,18 @@ class CompanyController extends Controller
 
     public function update(UpdateCompanyRequest $request, Company $company): JsonResponse|RedirectResponse
     {
-        $company = $this->companies->update($company, $request->validated());
+        abort_unless(CompanyContext::belongsToUser($company->id, $request->user()), 403);
+
+        $company->loadMissing('registrationRequest');
+        abort_if($company->registrationRequest?->status === RegistrationRequest::STATUS_REJECTED, 403);
+
+        $data = $request->validated();
+
+        if (! $request->user()?->hasRole('super_admin')) {
+            unset($data['is_active']);
+        }
+
+        $company = $this->companies->update($company, $data);
 
         if ($request->ajax()) {
             return response()->json([
@@ -94,7 +110,7 @@ class CompanyController extends Controller
 
     public function destroy(Company $company): RedirectResponse
     {
-        abort_unless(auth()->user()?->can('companies.delete'), 403);
+        abort_unless(auth()->user()?->can('companies.delete') && CompanyContext::belongsToUser($company->id, auth()->user()), 403);
 
         $this->companies->delete($company);
 

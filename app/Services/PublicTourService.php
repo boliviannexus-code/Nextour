@@ -25,6 +25,7 @@ class PublicTourService
     public function categories(): Collection
     {
         return Category::query()
+            ->withLocale()
             ->where('is_active', true)
             ->withCount(['tours' => fn (Builder $query) => $query->publiclyBookable()])
             ->orderBy('name')
@@ -50,16 +51,13 @@ class PublicTourService
             ->when($filters['category'] ?? null, fn (Builder $query, string $category): Builder => $query->where('category_id', $category))
             ->when($filters['guide_type'] ?? null, fn (Builder $query, string $guideType): Builder => $query->where('guide_type_id', $guideType))
             ->when($filters['duration'] ?? null, fn (Builder $query, string $duration): Builder => $this->applyDurationFilter($query, $duration))
-            ->when($filters['max_price'] ?? null, function (Builder $query, string $price): void {
-                $query->whereHas('prices', fn (Builder $prices): Builder => $prices->where('price_usd', '<=', (float) $price));
-            })
             ->when($startDate, function (Builder $query, string $startDate) use ($endDate, $filters): void {
                 $people = max(1, (int) ($filters['people'] ?? 1));
-                $query->whereHas('availabilities', fn (Builder $availability): Builder => $this->availableForPeople($availability, $startDate, $people, $endDate));
+                $this->availableInDateRange($query, $startDate, $people, $endDate);
             })
             ->when(($filters['people'] ?? null) && ! $startDate, function (Builder $query) use ($filters): void {
                 $people = max(1, (int) $filters['people']);
-                $query->whereHas('availabilities', fn (Builder $availability): Builder => $this->availableForPeople($availability, null, $people));
+                $query->where(fn (Builder $capacity): Builder => $this->tourCapacityForPeople($capacity, $people));
             })
             ->paginate($perPage)
             ->withQueryString();
@@ -75,18 +73,16 @@ class PublicTourService
         );
 
         return $tour->load([
-            'category',
-            'guideType',
-            'transportType',
+            'category' => fn ($query) => $query->withLocale(),
+            'guideType' => fn ($query) => $query->withLocale(),
+            'transportType' => fn ($query) => $query->withLocale(),
             'images',
             'prices',
-            'itineraryDays.stops.activityType',
+            'itineraryDays.stops.activityType' => fn ($query) => $query->withLocale(),
             'reviews.user',
             'availabilities' => fn ($query) => $query
-                ->where('date', '>=', now()->toDateString())
-                ->where('status', TourAvailability::STATUS_AVAILABLE)
-                ->orderBy('date')
-                ->limit(30),
+                ->whereBetween('date', [now()->toDateString(), now()->addMonthsNoOverflow(3)->toDateString()])
+                ->orderBy('date'),
             'availabilities.prices',
         ])->loadAvg('reviews', 'rating')->loadCount('reviews');
     }
@@ -94,8 +90,14 @@ class PublicTourService
     private function baseQuery(): Builder
     {
         return Tour::query()
+            ->withLocale()
             ->publiclyBookable()
-            ->with(['category', 'guideType', 'images', 'prices'])
+            ->with([
+                'category' => fn ($query) => $query->withLocale(),
+                'guideType' => fn ($query) => $query->withLocale(),
+                'images',
+                'prices',
+            ])
             ->withAvg('reviews', 'rating')
             ->withCount('reviews');
     }
@@ -110,6 +112,13 @@ class PublicTourService
         };
     }
 
+    private function availableInDateRange(Builder $query, string $startDate, int $people, ?string $endDate = null): Builder
+    {
+        $endDate ??= $startDate;
+
+        return $query->whereHas('availabilities', fn (Builder $availability): Builder => $this->availableForPeople($availability, $startDate, $people, $endDate));
+    }
+
     private function availableForPeople(Builder $availability, ?string $date, int $people, ?string $endDate = null): Builder
     {
         return $availability
@@ -121,6 +130,13 @@ class PublicTourService
                     ->whereRaw('COALESCE(tour_availabilities.capacity, tours.capacity) IS NULL')
                     ->orWhereRaw('(COALESCE(tour_availabilities.capacity, tours.capacity) - tour_availabilities.booked_count) >= ?', [$people]);
             });
+    }
+
+    private function tourCapacityForPeople(Builder $query, int $people): Builder
+    {
+        return $query
+            ->whereNull('capacity')
+            ->orWhere('capacity', '>=', $people);
     }
 
     private function dateRange(array $filters): array

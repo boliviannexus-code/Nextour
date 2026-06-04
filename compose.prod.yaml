@@ -1,0 +1,31 @@
+services:
+  app:
+    image: nexguide
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    env_file:
+      - .env.production
+    depends_on:
+      - pgsql
+    networks:
+      - nexguide
+
+  pgsql:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: nexguide_db
+      POSTGRES_USER: nexguide_user
+      POSTGRES_PASSWORD: DaniloMoreno4
+    volumes:
+      - pgsql_data:/var/lib/postgresql/data
+    networks:
+      - nexguide
+
+networks:
+  nexguide:
+
+volumes:
+  pgsql_data:

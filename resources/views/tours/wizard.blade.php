@@ -151,7 +151,7 @@
                         @if ($isApprovedLimitedEdit)
                             Solo puedes modificar palabras clave, imagenes y operacion. Al guardar, el tour pasara a revision.
                         @else
-                            {{ $isNew ? 'Selecciona la categoria para iniciar el borrador.' : 'Puedes guardar y continuar luego desde este punto.' }}
+                            {{ $isNew ? 'Selecciona la categoria e ingresa el titulo para iniciar el borrador.' : 'Puedes guardar y continuar luego desde este punto.' }}
                         @endif
                     </div>
                 </div>
@@ -474,6 +474,8 @@
                         @endif
                         @if ($isApprovedLimitedEdit)
                             <button class="btn btn-primary" type="submit" name="action" value="submit_review">Guardar y enviar a revision</button>
+                        @elseif ($isNew)
+                            <button class="btn btn-primary" type="submit" name="action" value="next">Iniciar registro</button>
                         @elseif (! $isNew)
                             <button class="btn btn-outline-primary" type="submit" name="action" value="draft">Guardar borrador</button>
                             @if ($currentStep < \App\Models\Tour::TOTAL_STEPS)

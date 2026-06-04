@@ -29,6 +29,10 @@ class StoreUserRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            if (! $this->user()?->hasRole('super_admin') && array_intersect($this->input('roles', []), ['super_admin', 'admin']) !== []) {
+                $validator->errors()->add('roles', 'Solo un super administrador puede asignar roles administrativos.');
+            }
+
             if ($this->filled('company_id') || CompanyContext::canAssignNoCompany($this->user())) {
                 return;
             }

@@ -28,8 +28,26 @@ class AuthController extends Controller
 
         $request->session()->regenerate();
 
+        if (! $request->user()?->is_active) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()
+                ->withErrors(['email' => 'Tu cuenta esta desactivada. Contacta con la administracion.'])
+                ->onlyInput('email');
+        }
+
         if ($request->user()?->hasRole('tourist')) {
             return redirect()->intended(route('tourist.reservations.index'));
+        }
+
+        if ($request->user()?->hasAnyRole(['empresa_pendiente', 'registration_applicant'])) {
+            return redirect()->route('dashboard');
+        }
+
+        if ($request->user()?->hasAnyRole(['manager', 'gerente'])) {
+            return redirect()->route('manager.dashboard');
         }
 
         return redirect()->intended(route('dashboard'));
@@ -42,6 +60,13 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login');
+        return redirect()
+            ->route('login')
+            ->withHeaders([
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma' => 'no-cache',
+                'Expires' => 'Sat, 01 Jan 2000 00:00:00 GMT',
+                'Clear-Site-Data' => '"cache"',
+            ]);
     }
 }

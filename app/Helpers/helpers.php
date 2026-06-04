@@ -14,6 +14,9 @@ if (! function_exists('role_label')) {
             'admin' => 'Administrador',
             'super_admin' => 'Super administrador',
             'manager' => 'Gerente',
+            'gerente' => 'Gerente',
+            'empresa_pendiente' => 'Empresa pendiente',
+            'registration_applicant' => 'Solicitante en subsanacion',
             'viewer' => 'Visualizador',
         ];
 
@@ -31,6 +34,9 @@ if (! function_exists('permission_module_label')) {
             'permissions' => 'Permisos',
             'companies' => 'Empresas',
             'audits' => 'Auditoria',
+            'registration_requests' => 'Solicitudes de registro',
+            'subscription' => 'Suscripciones',
+            'credits' => 'Creditos',
         ];
 
         return $labels[$module] ?? str($module)->replace(['-', '_'], ' ')->headline()->toString();
@@ -51,6 +57,8 @@ if (! function_exists('permission_action_label')) {
             'assign-roles' => 'Asignar roles',
             'assign-permissions' => 'Asignar permisos',
             'manage' => 'Administrar',
+            'resubmit' => 'Reenviar',
+            'adjust' => 'Ajustar',
         ];
 
         return $labels[$action] ?? str($action)->replace(['-', '_'], ' ')->headline()->toString();

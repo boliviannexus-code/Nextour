@@ -4,12 +4,14 @@ namespace Tests\Feature\Tourist;
 
 use App\Models\Category;
 use App\Models\Company;
+use App\Models\RegistrationRequest;
 use App\Models\Tour;
 use App\Models\TourAvailability;
 use App\Models\TourBooking;
 use App\Models\TourPrice;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -34,7 +36,7 @@ class PublicTourExperienceTest extends TestCase
 
         $this->get(route('public.tours.show', $visible))
             ->assertOk()
-            ->assertSee('Reservar ahora');
+            ->assertSee(__('Reservar ahora'));
     }
 
     public function test_marketplace_filters_by_category_destination_date_people_and_price(): void
@@ -101,6 +103,22 @@ class PublicTourExperienceTest extends TestCase
             'status' => TourBooking::STATUS_CONFIRMED,
         ]);
         $this->assertSame(2, $availability->refresh()->booked_count);
+    }
+
+    public function test_booking_marks_availability_as_sold_out_when_capacity_is_reached(): void
+    {
+        $tour = $this->bookableTour(['title' => 'Ultimos cupos']);
+        $availability = $this->availability($tour, now()->addDays(5)->toDateString(), 4, 40);
+        $user = $this->tourist();
+
+        $this->actingAs($user)
+            ->post(route('public.bookings.store', $tour), $this->bookingPayload($availability, ['people' => 4]))
+            ->assertRedirect();
+
+        $availability->refresh();
+
+        $this->assertSame(4, $availability->booked_count);
+        $this->assertSame(TourAvailability::STATUS_SOLD_OUT, $availability->status);
     }
 
     public function test_booking_uses_individual_price_as_fallback_for_multiple_people(): void
@@ -196,6 +214,65 @@ class PublicTourExperienceTest extends TestCase
                 'country' => 'Bolivia',
             ])
             ->assertSessionHasErrors('people');
+
+        $this->actingAs($user)
+            ->post(route('public.bookings.store', $tour), [
+                'travel_date' => now()->addDays(4)->toDateString(),
+                'people' => 1,
+                'first_name' => 'Ana',
+                'last_name' => 'Perez',
+                'email' => 'ana@example.com',
+                'phone' => '70000000',
+                'country' => 'Bolivia',
+            ])
+            ->assertSessionHasErrors('travel_date');
+    }
+
+    public function test_public_calendar_marks_sold_out_dates(): void
+    {
+        $tour = $this->bookableTour(['title' => 'Calendario publico']);
+        $availability = $this->availability($tour, now()->addDays(3)->toDateString(), 1, 20);
+        $availability->update([
+            'status' => TourAvailability::STATUS_SOLD_OUT,
+            'booked_count' => 1,
+        ]);
+
+        $this
+            ->get(route('public.tours.show', $tour))
+            ->assertOk()
+            ->assertSee('Sold out');
+    }
+
+    public function test_operator_can_reopen_sold_out_day_by_increasing_capacity(): void
+    {
+        Permission::findOrCreate('tours.availability');
+
+        $tour = $this->bookableTour(['title' => 'Mas cupos']);
+        $availability = $this->availability($tour, now()->addDays(3)->toDateString(), 2, 20);
+        $availability->update([
+            'status' => TourAvailability::STATUS_SOLD_OUT,
+            'booked_count' => 2,
+        ]);
+        $tour->company()->update(['approval_status' => RegistrationRequest::STATUS_APPROVED]);
+        $user = User::factory()->create(['company_id' => $tour->company_id]);
+        $user->givePermissionTo('tours.availability');
+
+        $this
+            ->actingAs($user)
+            ->patchJson(route('tours.availability.day.update'), [
+                'tour_id' => $tour->id,
+                'date' => $availability->date->toDateString(),
+                'status' => TourAvailability::STATUS_SOLD_OUT,
+                'capacity' => 3,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('tour_availabilities', [
+            'id' => $availability->id,
+            'status' => TourAvailability::STATUS_AVAILABLE,
+            'capacity' => 3,
+            'booked_count' => 2,
+        ]);
     }
 
     public function test_tourist_cannot_view_another_tourist_booking_or_admin_dashboard(): void

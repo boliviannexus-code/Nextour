@@ -10,10 +10,16 @@ COPY vite.config.js ./
 RUN npm run build
 
 
-FROM composer:2 AS vendor
+FROM php:8.4-cli AS vendor
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git unzip \
+    && docker-php-ext-install exif \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 COPY composer.json composer.lock ./
 COPY app ./app
@@ -33,7 +39,7 @@ RUN composer install \
     --no-scripts
 
 
-FROM php:8.3-apache AS app
+FROM php:8.4-apache AS app
 
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
@@ -72,6 +78,8 @@ COPY --from=vendor /app/vendor ./vendor
 COPY --from=assets /app/public/build ./public/build
 
 RUN mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache \
+    && rm -rf public/storage \
+    && ln -s ../storage/app/public public/storage \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R ug+rwX storage bootstrap/cache
 
