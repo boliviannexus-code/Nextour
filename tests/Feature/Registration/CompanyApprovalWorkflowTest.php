@@ -154,10 +154,6 @@ class CompanyApprovalWorkflowTest extends TestCase
 
     public function test_independent_registration_creates_internal_company_using_commercial_name(): void
     {
-        if (! extension_loaded('gd') && ! class_exists(\Imagick::class)) {
-            $this->markTestSkipped('GD or Imagick is required to generate and optimize uploaded registration images.');
-        }
-
         Storage::fake('public');
         Notification::fake();
 
@@ -175,9 +171,9 @@ class CompanyApprovalWorkflowTest extends TestCase
             'work_type' => 'guide',
             'is_certified_guide' => false,
             'password' => 'password',
-            'id_front' => UploadedFile::fake()->image('id-front.jpg'),
-            'id_back' => UploadedFile::fake()->image('id-back.jpg'),
-            'profile_photo' => UploadedFile::fake()->image('profile-photo.jpg'),
+            'id_front' => $this->pngUpload('id-front.png'),
+            'id_back' => $this->pngUpload('id-back.png'),
+            'profile_photo' => $this->pngUpload('profile-photo.png'),
         ]);
 
         $this->assertSame(RegistrationRequest::TYPE_INDEPENDENT, $registrationRequest->type);
@@ -199,6 +195,63 @@ class CompanyApprovalWorkflowTest extends TestCase
             'status_after' => RegistrationRequest::STATUS_PENDING,
             'observation' => 'Solicitud independiente registrada.',
         ]);
+        Storage::disk('public')->assertExists($registrationRequest->independentProfile->id_front_path);
+        Storage::disk('public')->assertExists($registrationRequest->independentProfile->id_back_path);
+        Storage::disk('public')->assertExists($registrationRequest->independentProfile->profile_photo_path);
         Notification::assertSentTo($registrationRequest->user, RegistrationRequestReceived::class);
+    }
+
+    public function test_company_registration_persists_request_and_images_without_image_optimizer(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+
+        $this
+            ->post(route('business-register.company.store'), [
+                'name' => 'Andes Travel',
+                'legal_name' => 'Andes Travel SRL',
+                'tax_id' => '123456789',
+                'phone' => '70000000',
+                'email' => 'empresa@example.test',
+                'address' => 'Av. Siempre Viva 123',
+                'city' => 'La Paz',
+                'country' => 'Bolivia',
+                'website' => 'https://example.test',
+                'description' => 'Operadora turistica local.',
+                'legal_representative_first_name' => 'Luis',
+                'legal_representative_last_name' => 'Mamani',
+                'legal_representative_document_number' => 'CI-456',
+                'legal_representative_document_type' => 'CI',
+                'password' => 'password',
+                'password_confirmation' => 'password',
+                'logo' => $this->pngUpload('logo.png'),
+                'tax_document' => $this->pngUpload('nit.png'),
+            ])
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('success');
+
+        $company = Company::query()->where('email', 'empresa@example.test')->firstOrFail();
+
+        $this->assertAuthenticated();
+        $this->assertSame(RegistrationRequest::STATUS_PENDING, $company->approval_status);
+        $this->assertDatabaseHas('registration_requests', [
+            'company_id' => $company->id,
+            'type' => RegistrationRequest::TYPE_COMPANY,
+            'status' => RegistrationRequest::STATUS_PENDING,
+        ]);
+        $this->assertNotNull($company->logo_path);
+        $this->assertNotNull($company->tax_document_path);
+        Storage::disk('public')->assertExists($company->logo_path);
+        Storage::disk('public')->assertExists($company->tax_document_path);
+    }
+
+    private function pngUpload(string $name): UploadedFile
+    {
+        $png = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            true
+        );
+
+        return UploadedFile::fake()->createWithContent($name, $png);
     }
 }

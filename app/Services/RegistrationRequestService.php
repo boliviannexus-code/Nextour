@@ -14,8 +14,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Spatie\Image\Image;
+use Throwable;
 
 class RegistrationRequestService
 {
@@ -268,25 +268,37 @@ class RegistrationRequestService
 
     private function storeOptimizedImage(UploadedFile $image, string $directory): string
     {
+        Storage::disk('public')->makeDirectory($directory);
+
         if (! extension_loaded('gd') && ! class_exists(\Imagick::class)) {
-            throw ValidationException::withMessages([
-                'image' => 'No se pudo optimizar la imagen. Activa GD o Imagick en PHP para convertir imagenes a WebP.',
-            ]);
+            return $this->storeOriginalImage($image, $directory);
         }
 
         $path = trim($directory, '/').'/'.Str::uuid()->toString().'.webp';
         $absolutePath = Storage::disk('public')->path($path);
 
-        Storage::disk('public')->makeDirectory($directory);
+        try {
+            $optimized = Image::load((string) $image->getRealPath());
 
-        $optimized = Image::load((string) $image->getRealPath());
+            if ($optimized->getWidth() > self::IMAGE_MAX_WIDTH) {
+                $optimized->width(self::IMAGE_MAX_WIDTH);
+            }
 
-        if ($optimized->getWidth() > self::IMAGE_MAX_WIDTH) {
-            $optimized->width(self::IMAGE_MAX_WIDTH);
+            $optimized->quality(self::IMAGE_WEBP_QUALITY)->save($absolutePath);
+
+            return $path;
+        } catch (Throwable) {
+            Storage::disk('public')->delete($path);
+
+            return $this->storeOriginalImage($image, $directory);
         }
+    }
 
-        $optimized->quality(self::IMAGE_WEBP_QUALITY)->save($absolutePath);
+    private function storeOriginalImage(UploadedFile $image, string $directory): string
+    {
+        $extension = $image->extension() ?: $image->guessExtension() ?: 'jpg';
+        $filename = Str::uuid()->toString().'.'.$extension;
 
-        return $path;
+        return $image->storeAs(trim($directory, '/'), $filename, 'public');
     }
 }
