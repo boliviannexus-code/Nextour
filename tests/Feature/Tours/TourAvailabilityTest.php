@@ -98,6 +98,33 @@ class TourAvailabilityTest extends TestCase
         ]);
     }
 
+    public function test_grid_exposes_tour_capacity_and_day_update_rejects_a_higher_capacity(): void
+    {
+        $user = $this->userWithAvailabilityPermission();
+        $tour = $this->tourForCompany($user->company, ['capacity' => 10]);
+
+        $this
+            ->actingAs($user)
+            ->getJson(route('tours.availability.grid', [
+                'tour_id' => $tour->id,
+                'start_date' => '2026-06-01',
+                'days' => 7,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('tours.0.max_capacity', 10);
+
+        $this
+            ->actingAs($user)
+            ->patchJson(route('tours.availability.day.update'), [
+                'tour_id' => $tour->id,
+                'date' => '2026-06-01',
+                'status' => TourAvailability::STATUS_AVAILABLE,
+                'capacity' => 11,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('capacity');
+    }
+
     public function test_user_cannot_update_other_company_tour_availability(): void
     {
         $user = $this->userWithAvailabilityPermission();

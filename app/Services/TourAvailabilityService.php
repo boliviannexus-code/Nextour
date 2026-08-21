@@ -179,6 +179,7 @@ class TourAvailabilityService
             'id' => $tour->id,
             'title' => $tour->display_title ?: 'Tour sin titulo',
             'is_active' => $tour->status === Tour::STATUS_ACTIVE,
+            'max_capacity' => $tour->capacity,
             'prices' => $tour->prices->map(fn (TourPrice $price): array => $this->pricePayload($price))->all(),
             'days' => $dates->map(function (CarbonImmutable $date) use ($tour, $availabilities): array {
                 $availability = $availabilities->get($date->toDateString());

@@ -129,10 +129,12 @@
             </div>
             <div class="mb-2">
                 <label class="form-label">Cupo maximo</label>
-                <input class="form-control" name="capacity" type="number" min="0">
+                <input class="form-control" name="capacity" type="number" min="0" aria-describedby="availability-capacity-help">
+                <div class="form-hint" id="availability-capacity-help" data-capacity-help></div>
             </div>
             <div class="mb-3" data-popover-prices></div>
-            <button class="btn btn-primary w-100" type="submit">Guardar cambios</button>
+            <div class="alert alert-danger d-none py-2" role="alert" aria-live="polite" data-day-error></div>
+            <button class="btn btn-primary w-100" type="submit" data-submit-label="Guardar cambios">Guardar cambios</button>
         </form>
     </div>
 @endsection
@@ -147,6 +149,7 @@
             const popover = document.querySelector('[data-day-popover]');
             const dayForm = document.querySelector('[data-day-form]');
             const bulkForm = document.querySelector('[data-bulk-form]');
+            const dayError = popover.querySelector('[data-day-error]');
             let gridState = { dates: [], tours: [], statuses: @json($statuses), range: {} };
 
             const statusClass = (status) => status || 'closed';
@@ -161,8 +164,27 @@
                     ...options,
                 });
                 const payload = await response.json().catch(() => ({}));
-                if (!response.ok) throw new Error(payload.message || 'No se pudo completar la operacion.');
+                if (!response.ok) {
+                    const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                    throw new Error(validationMessage || payload.message || 'No se pudo completar la operacion.');
+                }
                 return payload;
+            };
+
+            const setSubmitting = (form, submitting) => {
+                const button = form.querySelector('button[type="submit"]');
+                if (!button) return;
+                button.disabled = submitting;
+                const label = button.dataset.submitLabel || button.textContent.trim();
+                button.dataset.submitLabel = label;
+                button.innerHTML = submitting
+                    ? '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Guardando...'
+                    : label;
+            };
+
+            const showDayError = (message = '') => {
+                dayError.textContent = message;
+                dayError.classList.toggle('d-none', !message);
             };
 
             const loadGrid = async () => {
@@ -231,6 +253,11 @@
                 dayForm.date.value = day.date;
                 dayForm.status.value = day.status;
                 dayForm.capacity.value = day.capacity ?? '';
+                dayForm.capacity.max = tour.max_capacity ?? 99999;
+                popover.querySelector('[data-capacity-help]').textContent = tour.max_capacity === null
+                    ? 'Este tour no tiene un cupo máximo configurado.'
+                    : `Máximo permitido para este tour: ${tour.max_capacity}.`;
+                showDayError();
                 popover.querySelector('[data-popover-title]').textContent = tour.title;
                 popover.querySelector('[data-popover-subtitle]').textContent = day.date;
                 popover.querySelector('[data-popover-prices]').innerHTML = (day.prices || []).map((price, index) => `
@@ -285,13 +312,26 @@
                     const item = payload.prices.find((row) => String(row.tour_price_id || '') === String(price.dataset.tourPriceId || ''));
                     if (item) item.price_usd = price.value;
                 }
-                await requestJson('{{ route('tours.availability.day.update') }}', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                await loadGrid();
+                try {
+                    await requestJson('{{ route('tours.availability.day.update') }}', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    await loadGrid();
+                } catch (error) {
+                    window.alert(error.message);
+                    await loadGrid();
+                }
             });
             dayForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
-                await requestJson('{{ route('tours.availability.day.update') }}', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formPayload(dayForm)) });
-                await loadGrid();
+                showDayError();
+                setSubmitting(dayForm, true);
+                try {
+                    await requestJson('{{ route('tours.availability.day.update') }}', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formPayload(dayForm)) });
+                    await loadGrid();
+                } catch (error) {
+                    showDayError(error.message);
+                } finally {
+                    setSubmitting(dayForm, false);
+                }
             });
             bulkForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
@@ -301,8 +341,15 @@
                     payload.bulk_price_usd = payload.price_usd;
                 }
                 delete payload.price_usd;
-                await requestJson('{{ route('tours.availability.bulk') }}', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                await loadGrid();
+                setSubmitting(bulkForm, true);
+                try {
+                    await requestJson('{{ route('tours.availability.bulk') }}', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    await loadGrid();
+                } catch (error) {
+                    window.alert(error.message);
+                } finally {
+                    setSubmitting(bulkForm, false);
+                }
             });
             document.querySelector('[data-close-popover]')?.addEventListener('click', closePopover);
             tourFilter.addEventListener('change', loadGrid);
