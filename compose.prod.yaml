@@ -1,31 +1,97 @@
+x-nextour-environment: &nextour-environment
+  APP_ENV: ${APP_ENV:-production}
+  APP_DEBUG: ${APP_DEBUG:-false}
+  DB_HOST: ${DB_HOST:-pgsql}
+  DB_PORT: ${DB_PORT:-5432}
+  REDIS_HOST: ${REDIS_HOST:-redis}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+
+x-nextour-service: &nextour-service
+  image: ${DOCKER_IMAGE:-nextour-app:latest}
+  restart: unless-stopped
+  env_file:
+    - ${APP_ENV_FILE:-.env.docker}
+  environment:
+    <<: *nextour-environment
+  volumes:
+    - nextour-storage:/var/www/html/storage
+  networks:
+    - nextour
+
 services:
   app:
-    image: nexguide
+    <<: *nextour-service
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      <<: *nextour-environment
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-false}
     ports:
-      - "8080:80"
-    env_file:
-      - .env.production
+      - "${APP_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1/up') === false ? 1 : 0);"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
-      - pgsql
-    networks:
-      - nexguide
+      pgsql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  queue:
+    <<: *nextour-service
+    command: php artisan queue:work --sleep=3 --tries=3 --timeout=120 --max-time=3600
+    stop_grace_period: 130s
+    depends_on:
+      app:
+        condition: service_healthy
+
+  scheduler:
+    <<: *nextour-service
+    command: php artisan schedule:work --verbose --no-interaction
+    depends_on:
+      app:
+        condition: service_healthy
 
   pgsql:
     image: postgres:17
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: nexguide_db
-      POSTGRES_USER: nexguide_user
-      POSTGRES_PASSWORD: DaniloMoreno4
+      POSTGRES_DB: ${DB_DATABASE:-nextour_db}
+      POSTGRES_USER: ${DB_USERNAME:-nextour_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Configure DB_PASSWORD in .env.docker}
     volumes:
-      - pgsql_data:/var/lib/postgresql/data
+      - nextour-pgsql:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-nextour_user} -d ${DB_DATABASE:-nextour_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
-      - nexguide
+      - nextour
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - nextour-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - nextour
 
 networks:
-  nexguide:
+  nextour:
+    driver: bridge
 
 volumes:
-  pgsql_data:
+  nextour-storage:
+  nextour-pgsql:
+  nextour-redis:
