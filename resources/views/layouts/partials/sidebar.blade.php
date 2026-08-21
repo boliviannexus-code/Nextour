@@ -1,7 +1,7 @@
 @php
     $organizationOpen = request()->routeIs('companies.*', 'tours.*', 'bookings.*', 'credit-purchases.index');
     $catalogOpen = request()->routeIs('categories.*', 'guide-types.*', 'transport-types.*', 'activity-types.*', 'website-settings.*');
-    $adminOpen = request()->routeIs('users.*', 'roles.*', 'permissions.*', 'audits.*', 'registration-requests.*', 'subscriptions.*', 'credit-packages.*', 'credit-consumption-rules.*', 'credit-purchases.requests.*');
+    $adminOpen = request()->routeIs('users.*', 'roles.*', 'permissions.*', 'audits.*', 'database-backups.*', 'registration-requests.*', 'subscriptions.*', 'credit-packages.*', 'credit-consumption-rules.*', 'credit-purchases.requests.*');
     $isManager = auth()->user()?->hasAnyRole(['manager', 'gerente']);
     $isRegistrationApplicant = auth()->user()?->hasAnyRole(['empresa_pendiente', 'registration_applicant']);
     $dashboardRoute = $isRegistrationApplicant ? 'dashboard' : ($isManager ? 'manager.dashboard' : 'dashboard');
@@ -21,6 +21,7 @@
         || auth()->user()?->can('roles.view')
         || auth()->user()?->can('permissions.view')
         || auth()->user()?->can('audits.view')
+        || auth()->user()?->can('database-backups.manage')
         || auth()->user()?->can('subscription.view')
         || auth()->user()?->can('credits.view')
         || auth()->user()?->hasRole('super_admin');
@@ -198,6 +199,15 @@
                                         <a class="nav-link" href="{{ route('audits.index') }}">
                                             <span class="nav-link-icon"><i class="ti ti-list-search"></i></span>
                                             <span class="nav-link-title">Auditoria</span>
+                                        </a>
+                                    </li>
+                                @endcan
+
+                                @can('database-backups.manage')
+                                    <li class="nav-item {{ request()->routeIs('database-backups.*') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('database-backups.index') }}">
+                                            <span class="nav-link-icon"><i class="ti ti-database-export"></i></span>
+                                            <span class="nav-link-title">Respaldos</span>
                                         </a>
                                     </li>
                                 @endcan

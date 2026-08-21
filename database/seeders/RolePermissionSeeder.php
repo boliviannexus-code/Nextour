@@ -65,6 +65,7 @@ class RolePermissionSeeder extends Seeder
             'bookings.manage',
             'website.manage',
             'audits.view',
+            'database-backups.manage',
             'registration_requests.resubmit',
             'subscription.view',
             'subscription.manage',

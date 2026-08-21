@@ -10,6 +10,7 @@ use App\Http\Controllers\Web\CreditConsumptionRuleController;
 use App\Http\Controllers\Web\CreditPackageController;
 use App\Http\Controllers\Web\CreditPurchaseController;
 use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\DatabaseBackupController;
 use App\Http\Controllers\Web\GuideTypeController;
 use App\Http\Controllers\Web\LocationSearchController;
 use App\Http\Controllers\Web\ManagerDashboardController;
@@ -90,6 +91,14 @@ Route::middleware(['auth', 'noAuthCache'])->prefix('admin')->group(function (): 
     });
     Route::get('audits', [AuditController::class, 'index'])->middleware(['companyApproved', 'permission:audits.view'])->name('audits.index');
     Route::get('audits/{audit}', [AuditController::class, 'show'])->middleware(['companyApproved', 'permission:audits.view'])->name('audits.show');
+    Route::prefix('database-backups')->name('database-backups.')->middleware('permission:database-backups.manage')->group(function (): void {
+        Route::get('/', [DatabaseBackupController::class, 'index'])->name('index');
+        Route::post('/', [DatabaseBackupController::class, 'store'])->name('store');
+        Route::post('restore-upload', [DatabaseBackupController::class, 'restoreUpload'])->name('restore-upload');
+        Route::get('{backup}/download', [DatabaseBackupController::class, 'download'])->where('backup', '[A-Za-z0-9_.-]+\.sql')->name('download');
+        Route::post('{backup}/restore', [DatabaseBackupController::class, 'restoreStored'])->where('backup', '[A-Za-z0-9_.-]+\.sql')->name('restore');
+        Route::delete('{backup}', [DatabaseBackupController::class, 'destroy'])->where('backup', '[A-Za-z0-9_.-]+\.sql')->name('destroy');
+    });
     Route::prefix('subscriptions')->name('subscriptions.')->group(function (): void {
         Route::get('/', [SubscriptionCreditController::class, 'index'])->middleware('permission:subscription.view')->name('index');
         Route::put('settings', [SubscriptionCreditController::class, 'updateSettings'])->middleware('permission:subscription.manage')->name('settings.update');
